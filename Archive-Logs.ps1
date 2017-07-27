@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-Remove-Logs.ps1 - Log File Cleanup Script
+Archive-Logs.ps1 - Log File archiving Script
 
 .DESCRIPTION 
 A PowerShell script to delete various log files.
@@ -15,12 +15,12 @@ The paths to logfile folders, use comma (,) as delimeter and (') at the beginnin
 All logs older than count of days you specify will be deleted by script, by default that parameter equals 2 days 
 
 .EXAMPLE
-.\Remove-Logs.ps1 -Logpath "D:\IIS Logs\W3SVC1"
-This example will remove the log files in "D:\IIS Logs\W3SVC1".
+.\Acrhive-Logs.ps1 -Logpath "D:\IIS Logs\W3SVC1"
+This example will archive the log files in "D:\IIS Logs\W3SVC1".
 
 .EXAMPLE
-.\Remove-Logs.ps1 -Logpath "D:\IIS Logs\W3SVC1" -retentiondays 14
-This example will remove the log files in "D:\IIS Logs\W3SVC1" older than 14 days.
+.\Archive-Logs.ps1 -Logpath "D:\IIS Logs\W3SVC1" -retentiondays 14
+This example will archive the log files in "D:\IIS Logs\W3SVC1" older than 14 days.
 
 .NOTES
 Written by: Dmitry Sergeenko
@@ -32,11 +32,11 @@ param (
     [Parameter( Mandatory=$true)]
 	[string]$ArchivePath,
     [Parameter( Mandatory=$false)]
-    [int32]$retentiondays
+    $retentiondays
     	)
 
 #Load .NET assembly for file zipping
-[System.Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem') | Out-Null
+[System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null
 
 #Specifing the default log archiving interval
 if ($retentiondays -eq $null) {
@@ -51,17 +51,22 @@ if (!(Test-Path "$ArchivePath")){
                 }
 
 foreach ($path in $paths){
+    $logfoldername = $path.Split("\")[-1]
+        if ($path -like "*inetpub*"){
+            $logfoldername = "IIS_"+ $($logfoldername)   
+        }
+
     $logFiles = $null
     $logFiles = Get-ChildItem -Path $path -Recurse
 
     foreach ($item in $logFiles){
-        if (($item.extension -eq '.log') -and (([DateTime]::Now).AddDays(-($retentiondays)) -gt $item.LastWriteTime)){ #get all files older than 14 days and move them to a subdirectory 'Archive'
-                        Move-Item $item.FullName -Destination "$ArchivePath\$path"
-            
+        if (($item.extension -eq ".log") -and (([DateTime]::Now).AddDays(-($retentiondays)) -gt $item.LastWriteTime)){ 
+            if (!(Test-Path "$($path)\Archive")){
+                New-Item -ItemType Directory -Path "$($path)\Archive" | Out-Null
+                }               
+         Move-Item $item.FullName -Destination "$($path)\Archive"   
         }
     }
-    [IO.Compression.ZipFile]::CreateFromDirectory("$($path)\Archive","$($path)\$($date)_Archive.zip")
+    [IO.Compression.ZipFile]::CreateFromDirectory("$($path)\Archive","$($path)\$computername-$logfoldername-$($date)_Archive.zip") 
     Remove-Item "$($path)\Archive" -Recurse -Force
 }
-
-
